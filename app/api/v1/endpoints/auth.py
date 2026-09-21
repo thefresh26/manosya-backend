@@ -2,6 +2,11 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
+from app.core.rate_limit import (
+    limpiar_intentos,
+    registrar_intento_fallido,
+    segundos_de_bloqueo_restantes,
+)
 from app.core.security import create_access_token, verify_password
 from app.core.uploads import guardar_foto_perfil
 from app.crud import crud_usuario
@@ -47,8 +52,21 @@ async def registro(
 
 @router.post("/login", response_model=Token)
 def login(data: LoginRequest, db: Session = Depends(get_db)):
+    # Evita fuerza bruta: si ya fallaron demasiados intentos con este correo
+    # en los últimos minutos, se bloquea temporalmente antes de siquiera
+    # consultar la base de datos.
+    espera = segundos_de_bloqueo_restantes(data.correo)
+    if espera > 0:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Demasiados intentos fallidos. Intenta de nuevo en {espera // 60 + 1} minuto(s).",
+        )
+
     usuario = crud_usuario.get_by_correo(db, data.correo)
     if not usuario or not verify_password(data.contrasena, usuario.contrasena):
+        registrar_intento_fallido(data.correo)
         raise HTTPException(status_code=401, detail="Correo o contraseña incorrectos")
+
+    limpiar_intentos(data.correo)
     token = create_access_token({"sub": str(usuario.id)})
     return Token(access_token=token)

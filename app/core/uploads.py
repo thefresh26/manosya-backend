@@ -17,6 +17,20 @@ TAMANO_MAXIMO_BYTES = 5 * 1024 * 1024  # 5 MB
 DIRECTORIO_ESTATICO = Path(__file__).resolve().parent.parent / "static" / "fotos"
 
 
+def _extension_real(contenido: bytes) -> str | None:
+    """Detecta el tipo de imagen mirando los primeros bytes del archivo (su
+    "firma"), en vez de confiar en el Content-Type que manda el navegador,
+    que cualquiera puede falsificar fácilmente. Devuelve None si no coincide
+    con ninguno de los formatos permitidos."""
+    if contenido[:3] == b"\xff\xd8\xff":
+        return ".jpg"
+    if contenido[:8] == b"\x89PNG\r\n\x1a\n":
+        return ".png"
+    if contenido[:4] == b"RIFF" and contenido[8:12] == b"WEBP":
+        return ".webp"
+    return None
+
+
 async def guardar_foto_perfil(archivo: UploadFile | None) -> str | None:
     """Valida y guarda la foto de perfil subida en el registro.
 
@@ -26,8 +40,7 @@ async def guardar_foto_perfil(archivo: UploadFile | None) -> str | None:
     if archivo is None or not archivo.filename:
         return None
 
-    extension = TIPOS_PERMITIDOS.get(archivo.content_type)
-    if extension is None:
+    if archivo.content_type not in TIPOS_PERMITIDOS:
         raise HTTPException(
             status_code=400,
             detail="La foto debe ser JPG, PNG o WEBP.",
@@ -36,6 +49,13 @@ async def guardar_foto_perfil(archivo: UploadFile | None) -> str | None:
     contenido = await archivo.read()
     if len(contenido) > TAMANO_MAXIMO_BYTES:
         raise HTTPException(status_code=400, detail="La foto no puede pesar más de 5 MB.")
+
+    extension = _extension_real(contenido)
+    if extension is None:
+        raise HTTPException(
+            status_code=400,
+            detail="El archivo no es una imagen JPG, PNG o WEBP válida.",
+        )
 
     DIRECTORIO_ESTATICO.mkdir(parents=True, exist_ok=True)
     nombre_archivo = f"{uuid.uuid4().hex}{extension}"

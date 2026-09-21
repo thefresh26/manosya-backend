@@ -1,11 +1,13 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 
 class RegistroTrabajador(BaseModel):
     nombre: str
     apellido: str
     correo: EmailStr
-    contrasena: str
+    # Minimo 8 caracteres: evita contrasenas como "1" o "abc", sin exigir
+    # mayusculas/simbolos para no complicar el registro de un proyecto academico.
+    contrasena: str = Field(min_length=8)
     cedula: str
     celular: str
     ciudad: str
