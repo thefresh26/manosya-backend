@@ -2,6 +2,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from sqlalchemy import text
@@ -28,6 +29,23 @@ DIRECTORIO_STATIC = Path(__file__).resolve().parent / "static"
 DIRECTORIO_STATIC.mkdir(parents=True, exist_ok=True)
 (DIRECTORIO_STATIC / "fotos").mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=DIRECTORIO_STATIC), name="static")
+
+# Frontend ya compilado (SvelteKit + adapter-static), copiado aquí como
+# archivos estáticos listos. Así el backend sirve tanto la API como las
+# páginas del sitio, en un solo servidor y un solo servicio en Render.
+# Si esta carpeta no existe (por ejemplo, en desarrollo local si aún no se
+# ha compilado el frontend), el backend sigue funcionando solo como API.
+DIRECTORIO_FRONTEND = Path(__file__).resolve().parent / "frontend_dist"
+FRONTEND_DISPONIBLE = (DIRECTORIO_FRONTEND / "index.html").is_file()
+
+if FRONTEND_DISPONIBLE:
+    # Los archivos compilados (JS/CSS con nombres únicos) que SvelteKit
+    # referencia con rutas absolutas como "/_app/immutable/...".
+    app.mount(
+        "/_app",
+        StaticFiles(directory=DIRECTORIO_FRONTEND / "_app"),
+        name="frontend_assets",
+    )
 
 
 CATEGORIAS_INICIALES = [
@@ -67,6 +85,31 @@ def crear_tablas():
 app.include_router(api_router, prefix="/api/v1")
 
 
-@app.get("/")
-def root():
-    return {"status": "ok", "mensaje": "API de la plataforma de servicios"}
+if FRONTEND_DISPONIBLE:
+    @app.get("/{ruta_completa:path}", include_in_schema=False)
+    def servir_frontend(ruta_completa: str):
+        """
+        Sirve el frontend ya compilado (SPA). Si la ruta pedida coincide con
+        un archivo real dentro de frontend_dist (por ejemplo "robots.txt" o
+        "favicon.png"), lo devuelve tal cual. Para cualquier otra ruta (por
+        ejemplo "/registro", o rutas futuras del panel de admin) devuelve
+        siempre "index.html": el enrutador de SvelteKit, ya cargado en el
+        navegador, decide qué mostrar. Esta función se registra al final,
+        después de "/api/v1/..." y "/static/...", para no interferir con
+        esas rutas.
+        """
+        base = DIRECTORIO_FRONTEND.resolve()
+        archivo_pedido = (base / ruta_completa).resolve()
+
+        # Evita que alguien pida algo como "../../.env" y se salga de la
+        # carpeta del frontend compilado.
+        if base not in archivo_pedido.parents and archivo_pedido != base:
+            archivo_pedido = base / "index.html"
+
+        if archivo_pedido.is_file():
+            return FileResponse(archivo_pedido)
+        return FileResponse(base / "index.html")
+else:
+    @app.get("/")
+    def root():
+        return {"status": "ok", "mensaje": "API de la plataforma de servicios"}
