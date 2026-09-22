@@ -12,3 +12,5 @@ class EstadisticasAdmin(BaseModel):
     formularios_pendientes: int
     formularios_aprobados: int
     formularios_rechazados: int
+    denuncias_trabajador_pendientes: int
+    reportes_formulario_pendientes: int

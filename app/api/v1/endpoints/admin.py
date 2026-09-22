@@ -3,10 +3,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, requerir_administrador
-from app.crud import crud_servicio, crud_usuario
+from app.crud import crud_denuncia_trabajador, crud_reporte_formulario, crud_servicio, crud_usuario
 from app.models.servicio import Servicio
 from app.models.usuario import Usuario
+from app.schemas.denuncia_trabajador import DenunciaTrabajador, DenunciaTrabajadorResolver
 from app.schemas.estadisticas import EstadisticasAdmin
+from app.schemas.reporte_formulario import ReporteFormulario, ReporteFormularioResolver
 from app.schemas.servicio import RechazarServicio, ServicioConCategoria
 from app.schemas.usuario import UsuarioAdmin
 
@@ -107,6 +109,8 @@ def obtener_estadisticas(
         formularios_pendientes=por_estado_servicio["pendiente"],
         formularios_aprobados=por_estado_servicio["aprobado"],
         formularios_rechazados=por_estado_servicio["rechazado"],
+        denuncias_trabajador_pendientes=crud_denuncia_trabajador.contar_pendientes(db),
+        reportes_formulario_pendientes=crud_reporte_formulario.contar_pendientes(db),
     )
 
 
@@ -157,3 +161,86 @@ def rechazar_servicio(
     if servicio is None:
         raise HTTPException(status_code=404, detail="Servicio no encontrado")
     return _a_servicio_con_categoria(crud_servicio.rechazar(db, servicio, data.motivo))
+
+
+def _a_denuncia_trabajador(d) -> DenunciaTrabajador:
+    return DenunciaTrabajador(
+        id=d.id,
+        id_denunciante=d.id_denunciante,
+        nombre_denunciante=f"{d.denunciante.nombre} {d.denunciante.apellido}".strip() if d.denunciante else "",
+        id_trabajador=d.id_trabajador,
+        nombre_trabajador=f"{d.trabajador.nombre} {d.trabajador.apellido}".strip() if d.trabajador else "",
+        id_servicio=d.id_servicio,
+        motivo=d.motivo,
+        descripcion=d.descripcion,
+        estado=d.estado,
+        resolucion=d.resolucion,
+        creado_en=d.creado_en,
+    )
+
+
+def _a_reporte_formulario(r) -> ReporteFormulario:
+    return ReporteFormulario(
+        id=r.id,
+        id_trabajador=r.id_trabajador,
+        nombre_trabajador=f"{r.trabajador.nombre} {r.trabajador.apellido}".strip() if r.trabajador else "",
+        id_servicio=r.id_servicio,
+        titulo_servicio=r.servicio.titulo if r.servicio else "",
+        descripcion=r.descripcion,
+        estado=r.estado,
+        resolucion=r.resolucion,
+        creado_en=r.creado_en,
+    )
+
+
+@router.get("/denuncias-trabajador", response_model=list[DenunciaTrabajador])
+def listar_denuncias_trabajador(
+    db: Session = Depends(get_db),
+    _admin: Usuario = Depends(requerir_administrador),
+):
+    """Bandeja de quejas de clientes (o trabajadores actuando como clientes)
+    contra un trabajador. Separada de los reportes de errores en formularios."""
+    return [_a_denuncia_trabajador(d) for d in crud_denuncia_trabajador.listar_pendientes(db)]
+
+
+@router.patch("/denuncias-trabajador/{id_denuncia}/resolver", response_model=DenunciaTrabajador)
+def resolver_denuncia_trabajador(
+    id_denuncia: int,
+    data: DenunciaTrabajadorResolver,
+    db: Session = Depends(get_db),
+    _admin: Usuario = Depends(requerir_administrador),
+):
+    denuncia = crud_denuncia_trabajador.obtener(db, id_denuncia)
+    if denuncia is None:
+        raise HTTPException(status_code=404, detail="Denuncia no encontrada")
+
+    if data.accion == "desactivar_trabajador":
+        crud_usuario.desactivar(db, denuncia.trabajador)
+    elif data.accion == "desactivar_servicio" and denuncia.servicio is not None:
+        crud_servicio.desactivar(db, denuncia.servicio)
+    elif data.accion not in ("ninguna", "desactivar_trabajador", "desactivar_servicio"):
+        raise HTTPException(status_code=400, detail="Acción no reconocida")
+
+    return _a_denuncia_trabajador(crud_denuncia_trabajador.resolver(db, denuncia, data.resolucion))
+
+
+@router.get("/reportes-formulario", response_model=list[ReporteFormulario])
+def listar_reportes_formulario(
+    db: Session = Depends(get_db),
+    _admin: Usuario = Depends(requerir_administrador),
+):
+    """Bandeja de errores que un trabajador reportó sobre su propio formulario."""
+    return [_a_reporte_formulario(r) for r in crud_reporte_formulario.listar_pendientes(db)]
+
+
+@router.patch("/reportes-formulario/{id_reporte}/resolver", response_model=ReporteFormulario)
+def resolver_reporte_formulario(
+    id_reporte: int,
+    data: ReporteFormularioResolver,
+    db: Session = Depends(get_db),
+    _admin: Usuario = Depends(requerir_administrador),
+):
+    reporte = crud_reporte_formulario.obtener(db, id_reporte)
+    if reporte is None:
+        raise HTTPException(status_code=404, detail="Reporte no encontrado")
+    return _a_reporte_formulario(crud_reporte_formulario.resolver(db, reporte, data.resolucion))

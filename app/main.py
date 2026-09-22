@@ -11,7 +11,17 @@ from app.api.v1.router import api_router
 from app.core.config import settings
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
-from app.models import calificacion, modulo, modulo_por_rol, rol, servicio, usuario  # noqa: F401
+from app.models import (  # noqa: F401
+    calificacion,
+    denuncia_trabajador,
+    modulo,
+    modulo_por_rol,
+    reporte_formulario,
+    rol,
+    servicio,
+    solicitud,
+    usuario,
+)
 from app.models.categoria import Categoria
 
 app = FastAPI(title="Plataforma de Servicios - API")
