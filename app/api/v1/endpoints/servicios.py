@@ -23,6 +23,8 @@ def _a_servicio_con_categoria(db: Session, servicio: Servicio) -> ServicioConCat
         disponibilidad=servicio.disponibilidad,
         foto_url=servicio.foto_url,
         activo=servicio.activo,
+        estado=servicio.estado,
+        motivo_rechazo=servicio.motivo_rechazo,
         creado_en=servicio.creado_en,
         categoria=servicio.categoria,
         calificacion_promedio=promedio,
