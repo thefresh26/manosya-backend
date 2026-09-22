@@ -17,7 +17,10 @@ def listar_calificaciones(id_servicio: int, db: Session = Depends(get_db)):
 def crear_calificacion(id_servicio: int, data: CalificacionCrear, db: Session = Depends(get_db)):
     # Prototipo académico: como todavía no hay registro de clientes, cualquier
     # persona puede calificar un servicio existente indicando su nombre.
+    # Igual que al solicitar, solo se puede calificar un formulario ya
+    # aprobado por el administrador (uno pendiente o rechazado todavía no es
+    # público, así que no debería recibir calificaciones).
     servicio = crud_servicio.obtener(db, id_servicio)
-    if servicio is None:
+    if servicio is None or servicio.estado != "aprobado":
         raise HTTPException(status_code=404, detail="Servicio no encontrado")
     return crud_calificacion.crear(db, id_servicio, data)
