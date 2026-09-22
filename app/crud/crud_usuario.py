@@ -27,8 +27,22 @@ def obtener_o_crear_rol_trabajador(db: Session) -> Rol:
     return rol
 
 
+def obtener_o_crear_rol_cliente(db: Session) -> Rol:
+    rol = db.query(Rol).filter(Rol.nombre == "Cliente").first()
+    if rol is None:
+        rol = Rol(nombre="Cliente", descripcion="Persona que busca y contrata servicios")
+        db.add(rol)
+        db.commit()
+        db.refresh(rol)
+    return rol
+
+
 def registrar_trabajador(db: Session, data: RegistroTrabajador, foto_url: str | None = None) -> Usuario:
-    rol = obtener_o_crear_rol_trabajador(db)
+    # Todas las cuentas nuevas empiezan como Cliente (jerarquía de roles):
+    # cuando el administrador le apruebe su primer formulario de trabajo, la
+    # misma cuenta pasa a Trabajador (ver admin.aprobar_servicio), sin crear
+    # una cuenta aparte ni perder su historial como cliente.
+    rol = obtener_o_crear_rol_cliente(db)
     usuario = Usuario(
         correo=data.correo,
         contrasena=hash_password(data.contrasena),
@@ -74,7 +88,7 @@ def listar_destacados(db: Session, limite: int = 8) -> list[dict]:
     trabajadores = (
         db.query(Usuario)
         .join(Servicio, Servicio.id_usuario == Usuario.id)
-        .filter(Usuario.activo.is_(True), Servicio.activo.is_(True))
+        .filter(Usuario.activo.is_(True), Servicio.activo.is_(True), Servicio.estado == "aprobado")
         .options(joinedload(Usuario.servicios).joinedload(Servicio.categoria))
         .distinct()
         .order_by(Usuario.id.desc())
@@ -84,7 +98,7 @@ def listar_destacados(db: Session, limite: int = 8) -> list[dict]:
 
     resultado = []
     for usuario in trabajadores:
-        activos = [s for s in usuario.servicios if s.activo]
+        activos = [s for s in usuario.servicios if s.activo and s.estado == "aprobado"]
         if not activos:
             continue
         principal = max(activos, key=lambda s: s.creado_en)
@@ -92,7 +106,11 @@ def listar_destacados(db: Session, limite: int = 8) -> list[dict]:
         promedio, total = (
             db.query(func.avg(Calificacion.puntuacion), func.count(Calificacion.id))
             .join(Servicio, Servicio.id == Calificacion.id_servicio)
-            .filter(Servicio.id_usuario == usuario.id, Servicio.activo.is_(True))
+            .filter(
+                Servicio.id_usuario == usuario.id,
+                Servicio.activo.is_(True),
+                Servicio.estado == "aprobado",
+            )
             .first()
         )
 
@@ -115,6 +133,20 @@ def listar_destacados(db: Session, limite: int = 8) -> list[dict]:
 def listar_todos(db: Session) -> list[Usuario]:
     """Todos los usuarios registrados (cualquier rol), para el panel de administrador."""
     return db.query(Usuario).order_by(Usuario.id.desc()).all()
+
+
+def contar_por_rol(db: Session) -> dict[str, int]:
+    """Cuenta cuentas activas por rol. Como cada usuario tiene un único rol a
+    la vez (Cliente -> Trabajador es un ascenso de la misma cuenta, no una
+    cuenta nueva), esto nunca cuenta a la misma persona dos veces."""
+    filas = (
+        db.query(Rol.nombre, func.count(Usuario.id))
+        .join(Usuario, Usuario.id_rol == Rol.id)
+        .filter(Usuario.activo.is_(True))
+        .group_by(Rol.nombre)
+        .all()
+    )
+    return {nombre: cantidad for nombre, cantidad in filas}
 
 
 def obtener(db: Session, id_usuario: int) -> Usuario | None:

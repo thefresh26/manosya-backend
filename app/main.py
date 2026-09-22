@@ -68,6 +68,18 @@ def crear_tablas():
         conexion.execute(
             text("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS activo BOOLEAN NOT NULL DEFAULT TRUE")
         )
+        # Estado de aprobación del formulario de trabajo. Los formularios que
+        # ya existían antes de este cambio quedan "aprobado" (mantienen el
+        # comportamiento que ya tenían: visibles al público); los formularios
+        # nuevos siempre entran como "pendiente" (ver crud_servicio.crear).
+        conexion.execute(
+            text(
+                "ALTER TABLE servicio ADD COLUMN IF NOT EXISTS estado VARCHAR NOT NULL DEFAULT 'aprobado'"
+            )
+        )
+        conexion.execute(
+            text("ALTER TABLE servicio ADD COLUMN IF NOT EXISTS motivo_rechazo VARCHAR")
+        )
 
     # Siembra las categorías base la primera vez que arranca el backend,
     # para que el frontend no dependa de datos de ejemplo (contenido.js).

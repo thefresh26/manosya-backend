@@ -23,10 +23,16 @@ class Servicio(BaseModel):
     disponibilidad: str | None = None
     foto_url: str | None = None
     activo: bool
+    estado: str
+    motivo_rechazo: str | None = None
     creado_en: datetime
 
     class Config:
         from_attributes = True
+
+
+class RechazarServicio(BaseModel):
+    motivo: str | None = None
 
 
 class ServicioConCategoria(Servicio):
