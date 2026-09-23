@@ -3,8 +3,11 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.security import hash_password
 from app.models.calificacion import Calificacion
+from app.models.denuncia_trabajador import DenunciaTrabajador
+from app.models.reporte_formulario import ReporteFormulario
 from app.models.rol import Rol
 from app.models.servicio import Servicio
+from app.models.solicitud import Solicitud
 from app.models.usuario import Usuario
 from app.schemas.usuario import RegistroTrabajador
 
@@ -165,3 +168,48 @@ def reactivar(db: Session, usuario: Usuario) -> Usuario:
     db.commit()
     db.refresh(usuario)
     return usuario
+
+
+def eliminar(db: Session, usuario: Usuario) -> None:
+    """Borra la cuenta y TODO su rastro de forma permanente e irreversible
+    (a diferencia de desactivar, que solo oculta la cuenta). Como ninguna
+    relación tiene cascada configurada a nivel de base de datos, hay que
+    borrar a mano, en orden, todo lo que depende de este usuario antes de
+    poder borrar el registro de Usuario:
+
+    - Calificaciones de los servicios que este usuario publicó.
+    - Solicitudes donde es cliente, o donde el servicio es suyo.
+    - Denuncias donde es denunciante o denunciado.
+    - Reportes de formulario de sus propios servicios.
+    - Los servicios que publicó.
+    - Por último, el usuario mismo.
+    """
+    ids_servicios = [
+        id_servicio
+        for (id_servicio,) in db.query(Servicio.id).filter(Servicio.id_usuario == usuario.id).all()
+    ]
+
+    if ids_servicios:
+        db.query(Calificacion).filter(Calificacion.id_servicio.in_(ids_servicios)).delete(
+            synchronize_session=False
+        )
+        db.query(ReporteFormulario).filter(ReporteFormulario.id_servicio.in_(ids_servicios)).delete(
+            synchronize_session=False
+        )
+
+    db.query(Solicitud).filter(
+        (Solicitud.id_cliente == usuario.id) | (Solicitud.id_servicio.in_(ids_servicios or [-1]))
+    ).delete(synchronize_session=False)
+
+    db.query(DenunciaTrabajador).filter(
+        (DenunciaTrabajador.id_denunciante == usuario.id) | (DenunciaTrabajador.id_trabajador == usuario.id)
+    ).delete(synchronize_session=False)
+
+    db.query(ReporteFormulario).filter(ReporteFormulario.id_trabajador == usuario.id).delete(
+        synchronize_session=False
+    )
+
+    db.query(Servicio).filter(Servicio.id_usuario == usuario.id).delete(synchronize_session=False)
+
+    db.delete(usuario)
+    db.commit()

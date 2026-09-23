@@ -79,6 +79,27 @@ def desactivar_usuario(
     return _a_usuario_admin(crud_usuario.desactivar(db, usuario))
 
 
+@router.delete("/usuarios/{id_usuario}", status_code=204)
+def eliminar_usuario(
+    id_usuario: int,
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(requerir_administrador),
+):
+    """Borra la cuenta de forma real y permanente (a diferencia de
+    desactivar): también borra en cascada sus servicios, calificaciones,
+    solicitudes, denuncias y reportes. No se puede deshacer. Solo se
+    bloquea que un administrador se borre a sí mismo (para que nadie se
+    quede sin acceso al panel por accidente); borrar a otro administrador
+    sí está permitido, porque solo alguien que ya es Administrador puede
+    entrar a este panel."""
+    if id_usuario == admin.id:
+        raise HTTPException(status_code=400, detail="No puedes eliminar tu propia cuenta de administrador")
+    usuario = crud_usuario.obtener(db, id_usuario)
+    if usuario is None:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    crud_usuario.eliminar(db, usuario)
+
+
 @router.patch("/usuarios/{id_usuario}/reactivar", response_model=UsuarioAdmin)
 def reactivar_usuario(
     id_usuario: int,
