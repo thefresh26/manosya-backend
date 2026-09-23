@@ -40,6 +40,47 @@ def obtener_o_crear_rol_cliente(db: Session) -> Rol:
     return rol
 
 
+def obtener_o_crear_rol_administrador(db: Session) -> Rol:
+    rol = db.query(Rol).filter(Rol.nombre == "Administrador").first()
+    if rol is None:
+        rol = Rol(nombre="Administrador", descripcion="Control total de la plataforma")
+        db.add(rol)
+        db.commit()
+        db.refresh(rol)
+    return rol
+
+
+def crear_con_rol(db: Session, data, foto_url: str | None = None) -> Usuario:
+    """Crea una cuenta con el rol que el administrador elija (Cliente,
+    Trabajador o Administrador), desde el panel de admin. A diferencia de
+    `registrar_trabajador` (registro público, siempre empieza en Cliente),
+    aquí el rol viene explícito porque quien llama ya es un Administrador
+    autenticado."""
+    if data.rol == "Administrador":
+        rol = obtener_o_crear_rol_administrador(db)
+    elif data.rol == "Trabajador":
+        rol = obtener_o_crear_rol_trabajador(db)
+    else:
+        rol = obtener_o_crear_rol_cliente(db)
+
+    usuario = Usuario(
+        correo=data.correo,
+        contrasena=hash_password(data.contrasena),
+        nombre=data.nombre,
+        apellido=data.apellido,
+        cedula=data.cedula,
+        celular=data.celular,
+        ciudad=data.ciudad,
+        direccion=data.direccion,
+        foto_url=foto_url,
+        id_rol=rol.id,
+        activo=True,
+    )
+    db.add(usuario)
+    db.commit()
+    db.refresh(usuario)
+    return usuario
+
 def registrar_trabajador(db: Session, data: RegistroTrabajador, foto_url: str | None = None) -> Usuario:
     # Todas las cuentas nuevas empiezan como Cliente (jerarquía de roles):
     # cuando el administrador le apruebe su primer formulario de trabajo, la

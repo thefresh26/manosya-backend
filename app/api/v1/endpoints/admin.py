@@ -10,7 +10,7 @@ from app.schemas.denuncia_trabajador import DenunciaTrabajador, DenunciaTrabajad
 from app.schemas.estadisticas import EstadisticasAdmin
 from app.schemas.reporte_formulario import ReporteFormulario, ReporteFormularioResolver
 from app.schemas.servicio import RechazarServicio, ServicioConCategoria
-from app.schemas.usuario import UsuarioAdmin
+from app.schemas.usuario import CrearUsuarioAdmin, UsuarioAdmin
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -61,6 +61,24 @@ def listar_usuarios(
     """Lista completa de personas registradas (cualquier rol). Solo accesible
     con una sesión de un usuario con rol Administrador."""
     return [_a_usuario_admin(u) for u in crud_usuario.listar_todos(db)]
+
+
+@router.post("/usuarios", response_model=UsuarioAdmin, status_code=201)
+def crear_usuario(
+    data: CrearUsuarioAdmin,
+    db: Session = Depends(get_db),
+    _admin: Usuario = Depends(requerir_administrador),
+):
+    """Crea una cuenta con el rol que el admin elija, incluido Administrador.
+    A propósito no existe forma de hacer esto desde el registro público:
+    solo se puede llegar aquí ya estando autenticado como Administrador."""
+    if data.rol not in ("Cliente", "Trabajador", "Administrador"):
+        raise HTTPException(status_code=400, detail="Rol no reconocido")
+    if crud_usuario.get_by_correo(db, data.correo):
+        raise HTTPException(status_code=400, detail="Ese correo ya está registrado")
+    if crud_usuario.get_by_cedula(db, data.cedula):
+        raise HTTPException(status_code=400, detail="Esa cédula ya está registrada")
+    return _a_usuario_admin(crud_usuario.crear_con_rol(db, data))
 
 
 @router.patch("/usuarios/{id_usuario}/desactivar", response_model=UsuarioAdmin)

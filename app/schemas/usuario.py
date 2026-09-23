@@ -86,6 +86,24 @@ class UsuarioAdmin(BaseModel):
         from_attributes = True
 
 
+class CrearUsuarioAdmin(BaseModel):
+    """Para crear una cuenta desde el panel de administrador, con el rol que
+    el propio admin elija (incluido Administrador). A diferencia del
+    registro público, aquí no hay restricción de rol: quien usa este
+    endpoint ya es un Administrador autenticado, así que no hay riesgo en
+    dejarlo elegir el rol directamente."""
+
+    nombre: str
+    apellido: str
+    correo: EmailStr
+    contrasena: str = Field(min_length=8)
+    cedula: str
+    celular: str
+    ciudad: str
+    direccion: str = ""
+    rol: str  # "Cliente" | "Trabajador" | "Administrador"
+
+
 class LoginRequest(BaseModel):
     correo: EmailStr
     contrasena: str
