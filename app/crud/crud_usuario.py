@@ -75,6 +75,9 @@ def crear_con_rol(db: Session, data, foto_url: str | None = None) -> Usuario:
         foto_url=foto_url,
         id_rol=rol.id,
         activo=True,
+        # El admin ya validó a esta persona al crearle la cuenta a mano,
+        # así que no tiene sentido pedirle que además verifique su correo.
+        correo_verificado=True,
     )
     db.add(usuario)
     db.commit()

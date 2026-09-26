@@ -29,6 +29,7 @@ class Usuario(BaseModel):
     longitud: float | None = None
     foto_url: str | None = None
     id_rol: int
+    correo_verificado: bool = True
 
     class Config:
         from_attributes = True

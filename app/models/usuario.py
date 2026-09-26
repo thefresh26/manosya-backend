@@ -20,6 +20,10 @@ class Usuario(Base):
     longitud = Column(Float, nullable=True)
     foto_url = Column(String, nullable=True)
     activo = Column(Boolean, nullable=False, default=True)
+    # Cuentas creadas antes de este campo se tratan como ya verificadas
+    # (ver la migracion ALTER TABLE en main.py); las nuevas empiezan en
+    # False y se verifican con el enlace que llega por correo al registrarse.
+    correo_verificado = Column(Boolean, nullable=False, default=False)
     id_rol = Column(Integer, ForeignKey("rol.id"), nullable=False)
 
     rol = relationship("Rol", back_populates="usuarios")

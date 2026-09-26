@@ -16,6 +16,7 @@ from app.db.session import SessionLocal, engine
 from app.models import (  # noqa: F401
     calificacion,
     denuncia_trabajador,
+    email_verification_token,
     error_log,
     modulo,
     modulo_por_rol,
@@ -160,6 +161,14 @@ def crear_tablas():
         )
         conexion.execute(
             text("ALTER TABLE servicio ADD COLUMN IF NOT EXISTS motivo_rechazo VARCHAR")
+        )
+        # Cuentas que ya existían antes de este campo se consideran ya
+        # verificadas (no las vamos a bloquear ni a fastidiar con un aviso
+        # de verificación por algo que no existía cuando se registraron).
+        # Las cuentas nuevas parten en False (ver Usuario.correo_verificado
+        # y crud_usuario.registrar_trabajador).
+        conexion.execute(
+            text("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS correo_verificado BOOLEAN NOT NULL DEFAULT TRUE")
         )
 
     # Siembra las categorías base la primera vez que arranca el backend,

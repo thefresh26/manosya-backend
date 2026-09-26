@@ -86,3 +86,37 @@ def registrar_solicitud_recuperacion(correo: str) -> None:
             cantidad, primera = 0, time.time()
         _solicitudes_recuperacion[clave] = (cantidad + 1, primera)
 
+
+# --------------------------------------------------------------------
+# Límite de reenvíos del correo de verificación (bucket propio, misma idea
+# que el de recuperación de contraseña).
+# --------------------------------------------------------------------
+MAX_REENVIOS_VERIFICACION = 3
+VENTANA_VERIFICACION_SEGUNDOS = 60 * 60  # 1 hora
+
+_solicitudes_verificacion: dict[str, tuple[int, float]] = {}
+
+
+def segundos_de_espera_verificacion(correo: str) -> int:
+    with _lock:
+        registro = _solicitudes_verificacion.get(correo.lower())
+        if registro is None:
+            return 0
+        cantidad, primera = registro
+        transcurrido = time.time() - primera
+        if transcurrido >= VENTANA_VERIFICACION_SEGUNDOS:
+            del _solicitudes_verificacion[correo.lower()]
+            return 0
+        if cantidad < MAX_REENVIOS_VERIFICACION:
+            return 0
+        return int(VENTANA_VERIFICACION_SEGUNDOS - transcurrido)
+
+
+def registrar_solicitud_verificacion(correo: str) -> None:
+    clave = correo.lower()
+    with _lock:
+        cantidad, primera = _solicitudes_verificacion.get(clave, (0, time.time()))
+        if time.time() - primera >= VENTANA_VERIFICACION_SEGUNDOS:
+            cantidad, primera = 0, time.time()
+        _solicitudes_verificacion[clave] = (cantidad + 1, primera)
+
