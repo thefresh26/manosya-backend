@@ -19,6 +19,12 @@ class Solicitud(BaseModel):
     celular_cliente: str
     mensaje: str | None = None
     atendida: bool
+    completada: bool
+    # None si el trabajador todavia no la marca como completada (no hay
+    # cobro creado todavia). Una vez existe, el cliente ve el monto y si
+    # ya quedo aprobado, declinado, o sigue pendiente de pago.
+    estado_pago: str | None = None
+    monto_pago: float | None = None
     creado_en: datetime
 
     class Config:

@@ -20,6 +20,7 @@ from app.models import (  # noqa: F401
     error_log,
     modulo,
     modulo_por_rol,
+    pago,
     password_reset_token,
     reporte_formulario,
     rol,
@@ -169,6 +170,11 @@ def crear_tablas():
         # y crud_usuario.registrar_trabajador).
         conexion.execute(
             text("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS correo_verificado BOOLEAN NOT NULL DEFAULT TRUE")
+        )
+        # Solicitudes que ya existian antes del sistema de pagos quedan
+        # "no completadas" (no se les puede cobrar retroactivamente).
+        conexion.execute(
+            text("ALTER TABLE solicitud ADD COLUMN IF NOT EXISTS completada BOOLEAN NOT NULL DEFAULT FALSE")
         )
 
     # Siembra las categorías base la primera vez que arranca el backend,

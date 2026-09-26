@@ -9,6 +9,7 @@ from app.api.v1.endpoints import (
     servicios,
     solicitudes,
     trabajadores,
+    webhooks,
 )
 
 api_router = APIRouter()
@@ -20,3 +21,4 @@ api_router.include_router(calificaciones.router)
 api_router.include_router(solicitudes.router)
 api_router.include_router(denuncias.router)
 api_router.include_router(admin.router)
+api_router.include_router(webhooks.router)
