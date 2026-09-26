@@ -211,6 +211,13 @@ def reactivar(db: Session, usuario: Usuario) -> Usuario:
     return usuario
 
 
+def actualizar_contrasena(db: Session, usuario: Usuario, nueva_contrasena_plana: str) -> Usuario:
+    usuario.contrasena = hash_password(nueva_contrasena_plana)
+    db.commit()
+    db.refresh(usuario)
+    return usuario
+
+
 def eliminar(db: Session, usuario: Usuario) -> None:
     """Borra la cuenta y TODO su rastro de forma permanente e irreversible
     (a diferencia de desactivar, que solo oculta la cuenta). Como ninguna

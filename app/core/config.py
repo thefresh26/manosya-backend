@@ -13,12 +13,26 @@ class Settings(BaseSettings):
     # ejemplo: FRONTEND_URL=https://manosya.onrender.com
     frontend_url: str = "http://localhost:5173"
 
+    # Envío de correos (recuperar contraseña, notificaciones) vía Resend.
+    # Vacío hasta que se cree la cuenta en resend.com y se agregue la key
+    # real; mientras tanto, ver app/core/email.py (falla explícito, no
+    # silencioso, y queda registrado en la pestaña "Errores" del admin).
+    resend_api_key: str = ""
+    correo_remitente: str = "Voz Profesional <onboarding@resend.dev>"
+
     class Config:
         env_file = ".env"
 
     @property
     def origenes_permitidos(self) -> list[str]:
         return [url.strip() for url in self.frontend_url.split(",") if url.strip()]
+
+    @property
+    def frontend_url_principal(self) -> str:
+        """La primera URL de frontend_url, para construir enlaces (por
+        ejemplo el de restablecer contraseña) cuando hay varias separadas
+        por comas."""
+        return self.origenes_permitidos[0] if self.origenes_permitidos else "http://localhost:5173"
 
 
 settings = Settings()

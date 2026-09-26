@@ -50,3 +50,39 @@ def limpiar_intentos(correo: str) -> None:
     solo se equivocó una vez y luego acertó."""
     with _lock:
         _intentos.pop(correo.lower(), None)
+
+
+# --------------------------------------------------------------------
+# Límite de solicitudes de "olvidé mi contraseña" (bucket aparte del de
+# login: un correo mal escrito al hacer login no debería bloquear a esa
+# persona para pedir un enlace de recuperación, y viceversa).
+# --------------------------------------------------------------------
+MAX_SOLICITUDES_RECUPERACION = 3
+VENTANA_RECUPERACION_SEGUNDOS = 60 * 60  # 1 hora
+
+_solicitudes_recuperacion: dict[str, tuple[int, float]] = {}
+
+
+def segundos_de_espera_recuperacion(correo: str) -> int:
+    with _lock:
+        registro = _solicitudes_recuperacion.get(correo.lower())
+        if registro is None:
+            return 0
+        cantidad, primera = registro
+        transcurrido = time.time() - primera
+        if transcurrido >= VENTANA_RECUPERACION_SEGUNDOS:
+            del _solicitudes_recuperacion[correo.lower()]
+            return 0
+        if cantidad < MAX_SOLICITUDES_RECUPERACION:
+            return 0
+        return int(VENTANA_RECUPERACION_SEGUNDOS - transcurrido)
+
+
+def registrar_solicitud_recuperacion(correo: str) -> None:
+    clave = correo.lower()
+    with _lock:
+        cantidad, primera = _solicitudes_recuperacion.get(clave, (0, time.time()))
+        if time.time() - primera >= VENTANA_RECUPERACION_SEGUNDOS:
+            cantidad, primera = 0, time.time()
+        _solicitudes_recuperacion[clave] = (cantidad + 1, primera)
+
