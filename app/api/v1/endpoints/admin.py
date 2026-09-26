@@ -6,6 +6,7 @@ from app.api.deps import get_db, requerir_administrador
 from app.crud import (
     crud_calificacion,
     crud_denuncia_trabajador,
+    crud_error_log,
     crud_reporte_formulario,
     crud_servicio,
     crud_solicitud,
@@ -14,6 +15,7 @@ from app.crud import (
 from app.models.servicio import Servicio
 from app.models.usuario import Usuario
 from app.schemas.denuncia_trabajador import DenunciaTrabajador, DenunciaTrabajadorResolver
+from app.schemas.error_log import ErrorLog as ErrorLogSchema
 from app.schemas.estadisticas import EstadisticasAdmin
 from app.schemas.reporte_formulario import ReporteFormulario, ReporteFormularioResolver
 from app.schemas.servicio import RechazarServicio, ServicioConCategoria
@@ -151,6 +153,7 @@ def obtener_estadisticas(
     solicitudes_totales, solicitudes_pendientes = crud_solicitud.contar_totales_y_pendientes(db)
     calificacion_promedio, calificaciones_totales = crud_calificacion.promedio_y_total_global(db)
     categoria_top_nombre, categoria_top_total = crud_servicio.categoria_mas_popular(db)
+    errores_sin_revisar = crud_error_log.contar_no_vistos(db)
     return EstadisticasAdmin(
         total_clientes=por_rol.get("Cliente", 0),
         total_trabajadores=por_rol.get("Trabajador", 0),
@@ -167,6 +170,7 @@ def obtener_estadisticas(
         categoria_top_nombre=categoria_top_nombre,
         categoria_top_total=categoria_top_total,
         servicios_nuevos_semana=crud_servicio.contar_nuevos_ultimos_dias(db, dias=7),
+        errores_sin_revisar=errores_sin_revisar,
     )
 
 
@@ -300,3 +304,34 @@ def resolver_reporte_formulario(
     if reporte is None:
         raise HTTPException(status_code=404, detail="Reporte no encontrado")
     return _a_reporte_formulario(crud_reporte_formulario.resolver(db, reporte, data.resolucion))
+
+
+@router.get("/errores", response_model=list[ErrorLogSchema])
+def listar_errores(
+    db: Session = Depends(get_db),
+    _admin: Usuario = Depends(requerir_administrador),
+):
+    """Errores no controlados más recientes del backend (ver el middleware en
+    app/main.py que los captura y guarda). Sirve para detectar fallas sin
+    tener que entrar al dashboard de Render."""
+    return crud_error_log.listar_recientes(db)
+
+
+@router.patch("/errores/{id_error}/marcar-visto", response_model=ErrorLogSchema)
+def marcar_error_visto(
+    id_error: int,
+    db: Session = Depends(get_db),
+    _admin: Usuario = Depends(requerir_administrador),
+):
+    error = crud_error_log.obtener(db, id_error)
+    if error is None:
+        raise HTTPException(status_code=404, detail="Error no encontrado")
+    return crud_error_log.marcar_visto(db, error)
+
+
+@router.post("/errores/marcar-todos-vistos", status_code=204)
+def marcar_todos_los_errores_vistos(
+    db: Session = Depends(get_db),
+    _admin: Usuario = Depends(requerir_administrador),
+):
+    crud_error_log.marcar_todos_vistos(db)

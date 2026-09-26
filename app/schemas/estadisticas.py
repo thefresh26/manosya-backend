@@ -25,3 +25,4 @@ class EstadisticasAdmin(BaseModel):
     categoria_top_nombre: str | None
     categoria_top_total: int
     servicios_nuevos_semana: int
+    errores_sin_revisar: int

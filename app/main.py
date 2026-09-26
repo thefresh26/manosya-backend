@@ -1,19 +1,22 @@
+import traceback as traceback_module
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from sqlalchemy import text
 
 from app.api.v1.router import api_router
 from app.core.config import settings
+from app.crud import crud_error_log
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.models import (  # noqa: F401
     calificacion,
     denuncia_trabajador,
+    error_log,
     modulo,
     modulo_por_rol,
     reporte_formulario,
@@ -33,6 +36,33 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def capturar_errores_no_controlados(request: Request, call_next):
+    """Registra en la base de datos cualquier excepción no controlada que se
+    escape de un endpoint, para que el administrador la vea en el panel
+    (pestaña "Errores") sin depender de entrar al dashboard de Render. Si
+    guardar el error también falla (por ejemplo la base de datos está caída),
+    no deja que eso tumbe la respuesta original al cliente."""
+    try:
+        return await call_next(request)
+    except Exception as exc:
+        db = SessionLocal()
+        try:
+            crud_error_log.registrar(
+                db,
+                metodo=request.method,
+                ruta=request.url.path,
+                tipo_error=type(exc).__name__,
+                mensaje=str(exc) or "(sin mensaje)",
+                traceback=traceback_module.format_exc(),
+            )
+        except Exception:
+            pass
+        finally:
+            db.close()
+        return JSONResponse(status_code=500, content={"detail": "Error interno del servidor"})
 
 # Fotos de perfil subidas en el registro (ver app/core/uploads.py).
 DIRECTORIO_STATIC = Path(__file__).resolve().parent / "static"
