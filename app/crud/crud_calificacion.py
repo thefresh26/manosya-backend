@@ -30,3 +30,11 @@ def crear(db: Session, id_servicio: int, data: CalificacionCrear) -> Calificacio
     db.commit()
     db.refresh(calificacion)
     return calificacion
+
+def promedio_y_total_global(db: Session) -> tuple[float | None, int]:
+    """Calificación promedio y total de calificaciones en toda la
+    plataforma (todas las calificaciones de todos los servicios)."""
+    resultado = db.query(func.avg(Calificacion.puntuacion), func.count(Calificacion.id)).first()
+    promedio, total = resultado
+    return (round(float(promedio), 1) if promedio is not None else None, total or 0)
+

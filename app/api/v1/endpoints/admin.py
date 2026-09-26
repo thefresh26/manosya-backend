@@ -3,7 +3,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, requerir_administrador
-from app.crud import crud_denuncia_trabajador, crud_reporte_formulario, crud_servicio, crud_usuario
+from app.crud import (
+    crud_calificacion,
+    crud_denuncia_trabajador,
+    crud_reporte_formulario,
+    crud_servicio,
+    crud_solicitud,
+    crud_usuario,
+)
 from app.models.servicio import Servicio
 from app.models.usuario import Usuario
 from app.schemas.denuncia_trabajador import DenunciaTrabajador, DenunciaTrabajadorResolver
@@ -141,6 +148,9 @@ def obtener_estadisticas(
     un ascenso de la misma cuenta) y formularios por estado."""
     por_rol = crud_usuario.contar_por_rol(db)
     por_estado_servicio = crud_servicio.contar_por_estado(db)
+    solicitudes_totales, solicitudes_pendientes = crud_solicitud.contar_totales_y_pendientes(db)
+    calificacion_promedio, calificaciones_totales = crud_calificacion.promedio_y_total_global(db)
+    categoria_top_nombre, categoria_top_total = crud_servicio.categoria_mas_popular(db)
     return EstadisticasAdmin(
         total_clientes=por_rol.get("Cliente", 0),
         total_trabajadores=por_rol.get("Trabajador", 0),
@@ -150,6 +160,13 @@ def obtener_estadisticas(
         formularios_rechazados=por_estado_servicio["rechazado"],
         denuncias_trabajador_pendientes=crud_denuncia_trabajador.contar_pendientes(db),
         reportes_formulario_pendientes=crud_reporte_formulario.contar_pendientes(db),
+        solicitudes_totales=solicitudes_totales,
+        solicitudes_pendientes=solicitudes_pendientes,
+        calificaciones_totales=calificaciones_totales,
+        calificacion_promedio=calificacion_promedio,
+        categoria_top_nombre=categoria_top_nombre,
+        categoria_top_total=categoria_top_total,
+        servicios_nuevos_semana=crud_servicio.contar_nuevos_ultimos_dias(db, dias=7),
     )
 
 

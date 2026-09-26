@@ -1,3 +1,4 @@
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.solicitud import Solicitud
@@ -39,3 +40,13 @@ def marcar_atendida(db: Session, solicitud: Solicitud) -> Solicitud:
     db.commit()
     db.refresh(solicitud)
     return solicitud
+
+def contar_totales_y_pendientes(db: Session) -> tuple[int, int]:
+    """Cuántas solicitudes de contacto se han hecho en toda la plataforma y
+    cuántas siguen sin que el trabajador las marque como atendidas."""
+    total = db.query(func.count(Solicitud.id)).scalar() or 0
+    pendientes = (
+        db.query(func.count(Solicitud.id)).filter(Solicitud.atendida.is_(False)).scalar() or 0
+    )
+    return total, pendientes
+

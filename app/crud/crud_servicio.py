@@ -1,6 +1,9 @@
+from datetime import datetime, timedelta
+
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
+from app.models.categoria import Categoria
 from app.models.servicio import Servicio
 from app.models.usuario import Usuario
 from app.schemas.servicio import ServicioCrear
@@ -106,3 +109,26 @@ def contar_por_estado(db: Session) -> dict[str, int]:
     for estado, cantidad in filas:
         conteos[estado] = cantidad
     return conteos
+
+def categoria_mas_popular(db: Session) -> tuple[str | None, int]:
+    """La categoría con más formularios aprobados y activos (la que más se
+    ofrece en la plataforma en este momento)."""
+    fila = (
+        db.query(Categoria.nombre, func.count(Servicio.id).label("total"))
+        .join(Servicio, Servicio.id_categoria == Categoria.id)
+        .filter(Servicio.activo.is_(True), Servicio.estado == "aprobado")
+        .group_by(Categoria.nombre)
+        .order_by(func.count(Servicio.id).desc())
+        .first()
+    )
+    if fila is None:
+        return None, 0
+    return fila[0], fila[1]
+
+
+def contar_nuevos_ultimos_dias(db: Session, dias: int = 7) -> int:
+    """Formularios publicados (cualquier estado) en los últimos N días, para
+    mostrar si la plataforma está creciendo."""
+    limite = datetime.utcnow() - timedelta(days=dias)
+    return db.query(func.count(Servicio.id)).filter(Servicio.creado_en >= limite).scalar() or 0
+
